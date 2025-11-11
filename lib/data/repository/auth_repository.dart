@@ -11,8 +11,8 @@ class AuthRepository {
       "password": password,
     });
     
-    print("🔍 Respuesta completa del backend: $data"); // ← Agrega esta línea
-    print("🔍 Tipo de token: ${data["token"].runtimeType}"); // ← Y esta
+    print("🔍 Respuesta completa del backend: $data");
+    print("🔍 Tipo de token: ${data["token"].runtimeType}");
     
     final token = data["token"];
     api.setToken(token);
@@ -20,8 +20,12 @@ class AuthRepository {
   }
 
   Future<Map<String, dynamic>> getProfile() async {
-    final result = await api.get("auth/me");
-    print("🔍 Respuesta de profile: $result"); // ← Agrega esta línea
-    return result;
-  }
+  final result = await api.get("auth/me");
+  print("🔍 Respuesta completa de profile: $result");
+  print("🔍 Tipo de cada campo:");
+  result.forEach((key, value) {
+    print("  $key: ${value.runtimeType} = $value");
+  });
+  return result;
+}
 }

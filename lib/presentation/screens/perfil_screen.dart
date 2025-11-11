@@ -90,7 +90,6 @@ class _PerfilScreenState extends State<PerfilScreen> {
                     title: const Text("Cerrar sesión", style: TextStyle(color: Colors.red)),
                     leading: const Icon(Icons.logout, color: Colors.red),
                     onTap: () {
-                      // Aquí se implementará el logout real
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text("Sesión cerrada")),
                       );

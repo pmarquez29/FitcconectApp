@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/providers/mensaje_provider.dart';
 import '../../data/providers/auth_provider.dart';
 import '../../model/mensaje.dart';
-import 'dart:convert';
 
 class ChatScreen extends ConsumerWidget {
   const ChatScreen({super.key});
@@ -13,54 +12,32 @@ class ChatScreen extends ConsumerWidget {
     final chatsAsync = ref.watch(listaChatsProvider);
 
     return Scaffold(
-      backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        title: const Text(
-          "Chat",
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.edit, color: Colors.black87),
-            onPressed: () {},
-          ),
-        ],
+        title: const Text("Chat"),
+        backgroundColor: Colors.blue,
       ),
       body: chatsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, _) => Center(child: Text("Error: $err")),
         data: (chats) {
           if (chats.isEmpty) {
-            return const Center(child: Text("No hay conversaciones."));
+            return const Center(child: Text("No hay conversaciones aún."));
           }
 
           return ListView.builder(
-            padding: const EdgeInsets.all(8),
             itemCount: chats.length,
             itemBuilder: (context, index) {
               final chat = chats[index];
               final usuario = chat["usuario"];
               final ultimo = chat["ultimoMensaje"];
-              final esSistema = usuario == null || chat["id"] == 0;
 
               return ListTile(
                 leading: CircleAvatar(
-                  backgroundColor: esSistema ? Colors.green : Colors.grey[300],
-                  backgroundImage: !esSistema && usuario["foto"] != null
-                      ? MemoryImage(base64Decode(usuario["foto"]["data"]
-                          .cast<int>()
-                          .join(',')))
-                      : null,
-                  child: esSistema
-                      ? const Icon(Icons.smart_toy, color: Colors.white)
-                      : null,
+                  backgroundColor: Colors.blue[200],
+                  child: const Icon(Icons.person, color: Colors.white),
                 ),
                 title: Text(
-                  esSistema
-                      ? "SISTEMA FITCONNECT"
-                      : "${usuario["nombre"]} ${usuario["apellido"]}",
+                  "${usuario["nombre"] ?? ""} ${usuario["apellido"] ?? ""}",
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
                 subtitle: Text(
@@ -69,19 +46,18 @@ class ChatScreen extends ConsumerWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
                 trailing: Text(
-                  ultimo?["fecha_envio"]?.toString().split("T").first ?? "",
-                  style: const TextStyle(color: Colors.grey, fontSize: 12),
+                  (ultimo?["fecha_envio"] ?? "").toString().split("T").first,
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
                 ),
-                tileColor: esSistema ? Colors.greenAccent.shade100 : null,
-                onTap: esSistema
-                    ? null
-                    : () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                ConversacionScreen(usuarioId: chat["id"]),
-                          ),
-                        ),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          ConversacionScreen(usuarioId: chat["id"]),
+                    ),
+                  );
+                },
               );
             },
           );
@@ -91,23 +67,34 @@ class ChatScreen extends ConsumerWidget {
   }
 }
 
-class ConversacionScreen extends ConsumerWidget {
+class ConversacionScreen extends ConsumerStatefulWidget {
   final int usuarioId;
   const ConversacionScreen({super.key, required this.usuarioId});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ConversacionScreen> createState() =>
+      _ConversacionScreenState();
+}
+
+class _ConversacionScreenState extends ConsumerState<ConversacionScreen> {
+  final controller = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    ref.read(conversacionProvider.notifier).cargarConversacion(widget.usuarioId);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final mensajes = ref.watch(conversacionProvider);
     final notifier = ref.read(conversacionProvider.notifier);
     final auth = ref.watch(authProvider);
-    final controller = TextEditingController();
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 1,
-        title: const Text("Conversación", style: TextStyle(color: Colors.black)),
-        iconTheme: const IconThemeData(color: Colors.black),
+        backgroundColor: Colors.blue,
+        title: const Text("Conversación"),
       ),
       body: Column(
         children: [
@@ -137,36 +124,32 @@ class ConversacionScreen extends ConsumerWidget {
               },
             ),
           ),
-          _inputField(controller, () {
-            final texto = controller.text.trim();
-            if (texto.isNotEmpty) {
-              notifier.enviarMensaje(usuarioId, texto);
-              controller.clear();
-            }
-          }),
-        ],
-      ),
-    );
-  }
-
-  Widget _inputField(TextEditingController controller, VoidCallback onSend) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      color: Colors.grey[100],
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: controller,
-              decoration: const InputDecoration(
-                hintText: "Escribe un mensaje...",
-                border: InputBorder.none,
-              ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            color: Colors.grey[100],
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: controller,
+                    decoration: const InputDecoration(
+                      hintText: "Escribe un mensaje...",
+                      border: InputBorder.none,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.send, color: Colors.blue),
+                  onPressed: () {
+                    final texto = controller.text.trim();
+                    if (texto.isNotEmpty) {
+                      notifier.enviarMensaje(widget.usuarioId, texto);
+                      controller.clear();
+                    }
+                  },
+                ),
+              ],
             ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.send, color: Colors.blue),
-            onPressed: onSend,
           ),
         ],
       ),

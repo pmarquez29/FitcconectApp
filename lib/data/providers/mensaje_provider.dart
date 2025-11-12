@@ -4,12 +4,11 @@ import 'api_provider.dart';
 import 'auth_provider.dart';
 import '/model/mensaje.dart';
 
-/// Repositorio global
 final mensajeRepositoryProvider = Provider<MensajeRepository>((ref) {
   final api = ref.watch(apiClientProvider);
   final repo = MensajeRepository(api);
-
   final auth = ref.watch(authProvider);
+
   if (auth.token != null && auth.token!.isNotEmpty) {
     repo.conectarSocket(auth.token!);
   }
@@ -18,17 +17,11 @@ final mensajeRepositoryProvider = Provider<MensajeRepository>((ref) {
   return repo;
 });
 
-/// Chat actual (mensajes)
+/// Cargar conversación (alumno ↔ instructor)
 final conversacionProvider =
     StateNotifierProvider<ConversacionNotifier, List<Mensaje>>((ref) {
   final repo = ref.watch(mensajeRepositoryProvider);
-  final auth = ref.watch(authProvider);
-  final instructorId = auth.user?.alumnoInfo?.instructorId;
-
-  final notifier = ConversacionNotifier(repo, ref);
-  if (instructorId != null) notifier.cargarConversacion(instructorId);
-
-  return notifier;
+  return ConversacionNotifier(repo, ref);
 });
 
 class ConversacionNotifier extends StateNotifier<List<Mensaje>> {
@@ -42,14 +35,7 @@ class ConversacionNotifier extends StateNotifier<List<Mensaje>> {
     state = mensajes;
 
     repo.onNuevoMensaje((nuevo) {
-      // Solo agregar si pertenece a esta conversación
-      final auth = ref.read(authProvider);
-      if ((nuevo.remitenteId == usuarioId &&
-              nuevo.destinatarioId == auth.user!.id) ||
-          (nuevo.destinatarioId == usuarioId &&
-              nuevo.remitenteId == auth.user!.id)) {
-        state = [...state, nuevo];
-      }
+      state = [...state, nuevo];
     });
   }
 
@@ -60,8 +46,13 @@ class ConversacionNotifier extends StateNotifier<List<Mensaje>> {
   }
 }
 
-/// Lista de chats con alertas del sistema
+/// Lista de chats (para instructor o alumno)
 final listaChatsProvider = FutureProvider<List<dynamic>>((ref) async {
+  final auth = ref.watch(authProvider);
   final repo = ref.watch(mensajeRepositoryProvider);
-  return await repo.obtenerChats();
+  final rol = auth.user?.rol ?? '';
+  final instructorId = auth.user?.alumnoInfo?.instructorId;
+
+  return await repo.obtenerChats(rol, instructorId);
 });
+

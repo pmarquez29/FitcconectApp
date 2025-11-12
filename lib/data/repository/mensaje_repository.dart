@@ -8,9 +8,9 @@ class MensajeRepository {
 
   MensajeRepository(this.api);
 
-  /// Conexión a Socket.IO
+  // --- SOCKET ---
   void conectarSocket(String token) {
-    final serverUrl = api.baseUrl.replaceFirst('/api', ''); // Ej: http://10.0.2.2:4000
+    final serverUrl = api.baseUrl.replaceFirst('/api', '');
 
     _socket = IO.io(
       serverUrl,
@@ -21,15 +21,13 @@ class MensajeRepository {
           .build(),
     );
 
-    _socket!.onConnect((_) => print('✅ Socket conectado al servidor'));
-    _socket!.onDisconnect((_) => print('❌ Socket desconectado'));
+    _socket!.onConnect((_) => print("✅ Socket conectado"));
+    _socket!.onDisconnect((_) => print("❌ Socket desconectado"));
   }
 
-  /// Escuchar nuevos mensajes en tiempo real
   void onNuevoMensaje(Function(Mensaje) callback) {
-    _socket?.on('nuevoMensaje', (data) {
-      final mensaje = Mensaje.fromJson(data);
-      callback(mensaje);
+    _socket?.on("nuevoMensaje", (data) {
+      callback(Mensaje.fromJson(data));
     });
   }
 
@@ -37,13 +35,12 @@ class MensajeRepository {
     _socket?.disconnect();
   }
 
-  /// Obtener conversación (REST)
+  // --- REST ---
   Future<List<Mensaje>> obtenerConversacion(int usuarioId) async {
     final data = await api.get("mensajes/$usuarioId");
     return (data as List).map((m) => Mensaje.fromJson(m)).toList();
   }
 
-  /// Enviar mensaje (solo REST — el backend lo emitirá por socket)
   Future<Mensaje> enviarMensaje({
     required int destinatarioId,
     required String contenido,
@@ -55,9 +52,61 @@ class MensajeRepository {
     return Mensaje.fromJson(data);
   }
 
-  /// Obtener lista de chats
-  Future<List<dynamic>> obtenerChats() async {
+  Future<List<dynamic>> obtenerChats(String rol, int? instructorId) async {
+  print("🧠 Rol actual: $rol");
+  print("🧩 instructorId: $instructorId");
+
+  final List<dynamic> chats = [];
+
+  if (rol == "alumno" && instructorId != null) {
+    final conv = await obtenerConversacion(instructorId);
+    print("💬 Mensajes con instructor: ${conv.length}");
+    if (conv.isNotEmpty) {
+      final ultimo = conv.last;
+      chats.add({
+        "id": instructorId,
+        "tipo": "chat",
+        "usuario": {"nombre": "Tu instructor", "apellido": ""},
+        "ultimoMensaje": {
+          "contenido": ultimo.contenido,
+          "fecha_envio": ultimo.fechaEnvio,
+        }
+      });
+    }
+  } else {
     final data = await api.get("mensajes/chats");
-    return data as List;
+    print("📥 Chats devueltos por API: ${data.length}");
+    chats.addAll(data as List);
+  }
+
+  final notifs = await api.get("notificaciones");
+  print("🔔 Notificaciones: ${notifs.length}");
+    for (final n in notifs) {
+      chats.add({
+        "id": n["id"],
+        "tipo": "sistema",
+        "usuario": {
+          "nombre": "SISTEMA FITCONNECT",
+          "apellido": "",
+          "icono": n["tipo"],
+        },
+        "ultimoMensaje": {
+          "contenido": n["mensaje"],
+          "fecha_envio": n["created_at"],
+        },
+        "color": n["tipo"] == "alerta"
+            ? "yellow"
+            : "green",
+      });
+    }
+
+    // 🔹 Ordenar por fecha más reciente
+    chats.sort((a, b) {
+      final fechaA = DateTime.tryParse(a["ultimoMensaje"]["fecha_envio"] ?? "") ?? DateTime(0);
+      final fechaB = DateTime.tryParse(b["ultimoMensaje"]["fecha_envio"] ?? "") ?? DateTime(0);
+      return fechaB.compareTo(fechaA);
+    });
+
+    return chats;
   }
 }

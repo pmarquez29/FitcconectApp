@@ -26,4 +26,5 @@ flutter:
 
   assets:
     - assets/logo.png
+    - assets/rutina_placeholder.png
 

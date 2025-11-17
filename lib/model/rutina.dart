@@ -23,15 +23,23 @@ class Rutina {
 
   factory Rutina.fromJson(Map<String, dynamic> json) {
     return Rutina(
-      id: json["id"] is String ? int.tryParse(json["id"]) ?? 0 : json["id"] ?? 0,
-      nombre: json["nombre"] ?? "",
-      objetivo: json["objetivo"] ?? "",
-      nivel: json["nivel"] ?? "",
-      duracion: json["duracion"] ?? 0,
-      progreso: json["progreso"] ?? 0,
-      estado: json["estado"] ?? "",
-      fechaInicio: json["fecha_inicio"],
-      imagen: json["imagen"],
+      id: _toInt(json["id"]),
+      nombre: json["nombre"]?.toString() ?? "",
+      objetivo: json["objetivo"]?.toString() ?? "",
+      nivel: json["nivel"]?.toString() ?? "",
+      duracion: _toInt(json["duracion"]),
+      progreso: _toInt(json["progreso"]),
+      estado: json["estado"]?.toString() ?? "",
+      fechaInicio: json["fecha_inicio"]?.toString(),
+      imagen: json["imagen"]?.toString(),
     );
   }
+}
+
+int _toInt(dynamic value) {
+  if (value == null) return 0;
+  if (value is int) return value;
+  if (value is double) return value.toInt();
+  if (value is String) return int.tryParse(value) ?? 0;
+  return 0;
 }

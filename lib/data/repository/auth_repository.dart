@@ -1,7 +1,7 @@
 import '../api/api_client.dart';
 
 class AuthRepository {
-  final ApiClient api;
+  late ApiClient api;
 
   AuthRepository(this.api);
 

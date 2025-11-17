@@ -58,8 +58,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
     if (token != null && token.isNotEmpty) {
       try {
         print("🔑 Restaurando sesión...");
-        _authRepository.api.setToken(token);
-        ref.read(apiClientProvider).setToken(token); // sincroniza global
+
+        // 🔥 La única forma correcta
+        final api = ref.read(apiClientProvider);
+        api.setToken(token);
+        _authRepository.api = api;
 
         final userData = await _authRepository.getProfile();
         final user = User.fromJson(userData);

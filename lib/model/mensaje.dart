@@ -17,21 +17,20 @@ class Mensaje {
 
   factory Mensaje.fromJson(Map<String, dynamic> json) {
     return Mensaje(
-      id: json['id'] ?? 0,
-      remitenteId: json['remitente_id'] ?? 0,
-      destinatarioId: json['destinatario_id'] ?? 0,
-      contenido: json['contenido'] ?? '',
-      fechaEnvio: json['fecha_envio'] ?? '',
-      leido: json['leido'] ?? false,
+      id: _toInt(json['id']),
+      remitenteId: _toInt(json['remitente_id']),
+      destinatarioId: _toInt(json['destinatario_id']),
+      contenido: json['contenido']?.toString() ?? '',
+      fechaEnvio: json['fecha_envio']?.toString() ?? '',
+      leido: json['leido'] == true || json['leido'] == 1 || json['leido'] == "1",
     );
   }
+}
 
-  Map<String, dynamic> toJson() => {
-        "id": id,
-        "remitente_id": remitenteId,
-        "destinatario_id": destinatarioId,
-        "contenido": contenido,
-        "fecha_envio": fechaEnvio,
-        "leido": leido,
-      };
+int _toInt(dynamic value) {
+  if (value == null) return 0;
+  if (value is int) return value;
+  if (value is double) return value.toInt();
+  if (value is String) return int.tryParse(value) ?? 0;
+  return 0;
 }

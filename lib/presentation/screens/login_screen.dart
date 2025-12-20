@@ -143,7 +143,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'TU CÓDIGO DE ESTUDIANTE',
+                      'TU CORREO DE ESTUDIANTE',
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
@@ -154,11 +154,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     TextFormField(
                       controller: _emailController,
                       decoration: InputDecoration(
-                        hintText: "Ejemplo: EST-001_JU",
-                        suffixIcon: IconButton(
-                          icon: const Icon(Icons.visibility),
-                          onPressed: () {},
-                        ),
+                        hintText: "Ejemplo: alumno@gmail.com",
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),

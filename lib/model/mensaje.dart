@@ -5,6 +5,7 @@ class Mensaje {
   final String contenido;
   final String fechaEnvio;
   final bool leido;
+  final String tipo; // ✅ NUEVO: 'chat', 'recordatorio' o 'sistema'
 
   Mensaje({
     required this.id,
@@ -13,6 +14,7 @@ class Mensaje {
     required this.contenido,
     required this.fechaEnvio,
     required this.leido,
+    this.tipo = 'chat', // Por defecto es chat
   });
 
   factory Mensaje.fromJson(Map<String, dynamic> json) {
@@ -21,8 +23,9 @@ class Mensaje {
       remitenteId: _toInt(json['remitente_id']),
       destinatarioId: _toInt(json['destinatario_id']),
       contenido: json['contenido']?.toString() ?? '',
-      fechaEnvio: json['fecha_envio']?.toString() ?? '',
-      leido: json['leido'] == true || json['leido'] == 1 || json['leido'] == "1",
+      fechaEnvio: json['fecha_envio']?.toString() ?? json['created_at']?.toString() ?? '',
+      leido: json['leido'] == true || json['leido'] == 1,
+      tipo: json['tipo'] ?? 'chat', // Si viene del backend (recordatorio), lo usa
     );
   }
 }

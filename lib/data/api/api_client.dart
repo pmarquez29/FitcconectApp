@@ -15,10 +15,43 @@ class ApiClient {
 
   void setToken(String newToken) {
     token = newToken;
-    print("🔐 [ApiClient] Token configurado: ${newToken.substring(0, 15)}...");
+    
+    if (newToken.isNotEmpty && newToken.length >= 15) {
+      print("🔐 [ApiClient] Token configurado: ${newToken.substring(0, 15)}...");
+    } else {
+      print("🔐 [ApiClient] Token configurado: ${newToken.isEmpty ? 'VACÍO (Logout)' : newToken}");
+    }
   }
 
+  // --- GET ---
+  Future<dynamic> get(String endpoint) async {
+    print("📡 GET $endpoint");
+    
+    if (token != null && token!.length >= 15) {
+       print("🪪 Token actual: ${token!.substring(0, 15)}...");
+    } else {
+       print("🪪 Token actual: ${token ?? 'NULO/VACÍO'}");
+    }
+
+    final res = await http.get(
+      Uri.parse("$baseUrl/$endpoint"),
+      headers: {
+        "Content-Type": "application/json",
+        if (token != null && token!.isNotEmpty) "Authorization": "Bearer $token",
+      },
+    );
+
+    if (res.statusCode == 200) {
+      return jsonDecode(res.body);
+    } else {
+      print("❌ GET $endpoint → ${res.statusCode}: ${res.body}");
+      throw Exception("Error ${res.statusCode}: ${res.body}");
+    }
+  }
+
+  // --- POST ---
   Future<Map<String, dynamic>> post(String endpoint, Map<String, dynamic> body) async {
+    print("🚀 POST $endpoint");
     final res = await http.post(
       Uri.parse("$baseUrl/$endpoint"),
       headers: {
@@ -36,22 +69,43 @@ class ApiClient {
     }
   }
 
-  Future<dynamic> get(String endpoint) async {
-    print("📡 GET $endpoint");
-    print("🪪 Token actual: ${token?.substring(0, 15)}");
 
-    final res = await http.get(
+  Future<dynamic> put(String endpoint, Map<String, dynamic> body) async {
+    print("📝 PUT $endpoint");
+    final res = await http.put(
       Uri.parse("$baseUrl/$endpoint"),
       headers: {
         "Content-Type": "application/json",
         if (token != null && token!.isNotEmpty) "Authorization": "Bearer $token",
       },
+      body: jsonEncode(body),
     );
 
-    if (res.statusCode == 200) {
+    if (res.statusCode == 200 || res.statusCode == 201) {
       return jsonDecode(res.body);
     } else {
-      print("❌ GET $endpoint → ${res.statusCode}: ${res.body}");
+      print("❌ PUT Error ${res.statusCode}: ${res.body}");
+      throw Exception("Error ${res.statusCode}");
+    }
+  }
+
+  // --- ✅ EXTRA RECOMENDADO: PATCH ---
+  // (A veces se usa para actualizaciones parciales como 'marcar leído')
+  Future<dynamic> patch(String endpoint, Map<String, dynamic> body) async {
+    print("🔧 PATCH $endpoint");
+    final res = await http.patch(
+      Uri.parse("$baseUrl/$endpoint"),
+      headers: {
+        "Content-Type": "application/json",
+        if (token != null && token!.isNotEmpty) "Authorization": "Bearer $token",
+      },
+      body: jsonEncode(body),
+    );
+
+    if (res.statusCode == 200 || res.statusCode == 201) {
+      return jsonDecode(res.body);
+    } else {
+      print("❌ PATCH $endpoint → ${res.statusCode}: ${res.body}");
       throw Exception("Error ${res.statusCode}: ${res.body}");
     }
   }

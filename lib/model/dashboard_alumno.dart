@@ -97,6 +97,7 @@ class RachaDia {
 }
 
 class RutinaActiva {
+  final int id; // <--- Nuevo (necesario para navegar al detalle)
   final String nombre;
   final String objetivo;
   final String nivel;
@@ -104,6 +105,7 @@ class RutinaActiva {
   final double progreso;
 
   RutinaActiva({
+    this.id = 0, // Valor por defecto por seguridad
     required this.nombre,
     required this.objetivo,
     required this.nivel,
@@ -113,10 +115,11 @@ class RutinaActiva {
 
   factory RutinaActiva.fromJson(Map<String, dynamic> json) {
     return RutinaActiva(
+      id: _parseInt(json["id"]), // Asegúrate de mapearlo
       nombre: json["nombre"] ?? "",
       objetivo: json["objetivo"] ?? "",
       nivel: json["nivel"] ?? "",
-      fechaInicio: json["fecha_inicio"] ?? "",
+      fechaInicio: json["fechaInicio"] ?? json["fecha_inicio"] ?? "",
       progreso: _parseDouble(json["progreso"]),
     );
   }

@@ -1,4 +1,3 @@
-// data/providers/progreso_provider.dart
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../repository/progreso_repository.dart';
 import '../providers/api_provider.dart';
@@ -9,8 +8,16 @@ final progresoRepositoryProvider = Provider<ProgresoRepository>((ref) {
   return ProgresoRepository(api);
 });
 
-final progresoProvider = FutureProvider<ProgresoData>((ref) async {
+final progresoProvider = FutureProvider.autoDispose<ProgresoData>((ref) async {
   final repo = ref.watch(progresoRepositoryProvider);
-  final data = await repo.obtenerProgreso();
-  return ProgresoData.fromJson(data);
+  
+  final responses = await Future.wait([
+    repo.obtenerProgresoGeneral(),
+    repo.obtenerProgresoSemanal(),
+  ]);
+
+  final generalData = responses[0] as Map<String, dynamic>;
+  final weeklyData = responses[1] as List<dynamic>;
+
+  return ProgresoData.fromCombined(generalData, weeklyData);
 });

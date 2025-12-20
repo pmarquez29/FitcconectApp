@@ -7,7 +7,8 @@ class PerfilRepository {
   PerfilRepository(this.api);
 
   Future<AlumnoPerfil> fetchPerfil() async {
-    final data = await api.get("auth/me");  
+    final data = await api.get("auth/me");
     return AlumnoPerfil.fromUserJson(data);
   }
 }
+

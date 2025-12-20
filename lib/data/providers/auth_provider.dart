@@ -58,8 +58,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
     if (token != null && token.isNotEmpty) {
       try {
         print("🔑 Restaurando sesión...");
-
-        // 🔥 La única forma correcta
         final api = ref.read(apiClientProvider);
         api.setToken(token);
         _authRepository.api = api;
@@ -72,8 +70,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
           token: token,
           user: user,
         );
-
-        print("✅ Sesión restaurada correctamente: ${user.email}");
+        print("✅ Sesión restaurada: ${user.email}");
       } catch (e) {
         print("⚠️ Error restaurando sesión: $e");
         state = AuthState.initial();
@@ -81,25 +78,47 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  Future<void> login(String email, String password) async {
+  // ✅ NUEVO MÉTODO: Check Auth Status (Para recargar perfil/foto)
+  Future<void> checkAuthStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString("token");
+
+    if (token == null) {
+      logout();
+      return;
+    }
+
     try {
-      state = state.copyWith(isLoading: true, error: null);
-
-      final token = await _authRepository.login(email, password);
-
-      // 🔹 Sincronizamos inmediatamente con el cliente global
-      _authRepository.api.setToken(token);
-      ref.read(apiClientProvider).setToken(token);
-
-      // 🔹 Guardamos token localmente
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString("token", token);
-
-      // 🔹 Obtenemos el perfil
+      // Usamos el repositorio existente para pedir el perfil fresco
       final userData = await _authRepository.getProfile();
       final user = User.fromJson(userData);
 
-      // 🔹 Actualizamos el estado
+      state = state.copyWith(
+        isAuthenticated: true,
+        token: token,
+        user: user, // Aquí viene la foto actualizada
+        error: null,
+      );
+    } catch (e) {
+      print("⚠️ Error verificando estado: $e");
+      // Opcional: logout() si el token expiró, o solo notificar error
+    }
+  }
+
+  Future<void> login(String email, String password) async {
+    try {
+      state = state.copyWith(isLoading: true, error: null);
+      final token = await _authRepository.login(email, password);
+
+      _authRepository.api.setToken(token);
+      ref.read(apiClientProvider).setToken(token);
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString("token", token);
+
+      final userData = await _authRepository.getProfile();
+      final user = User.fromJson(userData);
+
       state = state.copyWith(
         isAuthenticated: true,
         token: token,
@@ -107,21 +126,16 @@ class AuthNotifier extends StateNotifier<AuthState> {
         isLoading: false,
       );
 
-      print("✅ Login exitoso. Token sincronizado globalmente.");
-
-      // ⚡ Esperamos brevemente para que Riverpod propague los cambios
       await Future.delayed(const Duration(milliseconds: 300));
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
     }
   }
 
-
   Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove("token");
-
-    ref.read(apiClientProvider).setToken(""); // limpiamos global
+    ref.read(apiClientProvider).setToken(""); 
     state = AuthState.initial();
   }
 }

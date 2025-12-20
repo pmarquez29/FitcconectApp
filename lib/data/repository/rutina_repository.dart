@@ -15,4 +15,8 @@ class RutinaRepository {
     print("✅ Respuesta backend: ${data is List ? data.length : 'Formato inesperado'} rutinas");
     return (data as List).map((r) => Rutina.fromJson(r)).toList();
   }
+  Future<Map<String, dynamic>> obtenerDetalleRutina(int rutinaId) async {
+    final data = await api.get("rutinas/alumno/detalle/$rutinaId");
+    return data as Map<String, dynamic>;
+  }
 }

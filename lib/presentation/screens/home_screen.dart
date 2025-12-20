@@ -1,9 +1,10 @@
-import 'package:app_fitconnect/data/providers/dashboard_alumno_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../data/providers/dashboard_alumno_provider.dart';
 import '../../model/dashboard_alumno.dart';
-import '../widgets/dashboard_cards.dart';
-import '../widgets/line_chart_widget.dart';
+import '../widgets/custom_header.dart';
+import '../widgets/activity_chart.dart';
+import '../widgets/registrar_progreso_sheet.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -13,139 +14,93 @@ class HomeScreen extends ConsumerWidget {
     final dashboardAsync = ref.watch(dashboardAlumnoProvider);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF9FAFB),
+      backgroundColor: const Color(0xFFF4F6F9), // Gris azulado moderno
       body: dashboardAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, stack) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Text(
-              "Error: $err",
-              style: const TextStyle(color: Colors.red),
-              textAlign: TextAlign.center,
-            ),
-          ),
-        ),
+        loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF10B981))),
+        error: (err, stack) => Center(child: Text("Error: $err")),
         data: (data) {
-          final alumno = data.alumno;
-          final progreso = data.progreso;
-
           return SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // --- CABECERA ---
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Image.asset("assets/logo.png", height: 50),
-                      const CircleAvatar(
-                        radius: 24,
-                        backgroundImage:
-                            NetworkImage("https://i.pravatar.cc/100?img=12"),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
+            child: RefreshIndicator(
+              onRefresh: () async => ref.refresh(dashboardAlumnoProvider),
+              color: const Color(0xFF10B981),
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(24, 10, 24, 40),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 10),
 
-                  // --- SALUDO Y DISCIPLINA ---
-                  Text(
-                    "¡Hola, ${alumno.nombre} 👋!",
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: const Color(0xFF0D47A1),
-                        ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    alumno.disciplina != null
-                        ? "Disciplina: ${alumno.disciplina}"
-                        : "Sin disciplina asignada",
-                    style: const TextStyle(color: Colors.grey, fontSize: 14),
-                  ),
-                  if (alumno.instructor != null)
-                    Text(
-                      "Instructor: ${alumno.instructor}",
-                      style: const TextStyle(
-                          color: Colors.grey, fontStyle: FontStyle.italic),
-                    ),
-                  const SizedBox(height: 20),
+                    // 2. Tarjeta de Resumen Global "Pro"
+                    _ProfessionalStatsSummary(progreso: data.progreso),
 
-                  // --- TARJETAS DE PROGRESO ---
-                  DashboardCards(
-                    progreso: "${progreso.general.toStringAsFixed(1)}%",
-                    completado: "${progreso.completadas}",
-                    total: "${progreso.totalRutinas}",
-                    pendientes: "${progreso.pendientes}",
-                  ),
-                  const SizedBox(height: 25),
+                    const SizedBox(height: 30),
 
-                  // --- GRÁFICO DE RACHA ---
-                  Card(
-                    elevation: 2,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16)),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            "📈 Progreso en Racha de Días",
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
+                    // 3. Título: Próximo Reto
+                    const Text("TU PRÓXIMO RETO", style: TextStyle(
+                      fontSize: 14, fontWeight: FontWeight.w900, 
+                      color: Color(0xFF94A3B8), letterSpacing: 1.2
+                    )),
+                    const SizedBox(height: 15),
+
+                    // 4. Tarjeta Verde (Rutina Actual)
+                    if (data.rutinaActiva != null)
+                      _ActiveRoutineGreenCard(rutina: data.rutinaActiva!)
+                    else
+                      const _NoRoutineCard(),
+
+                    const SizedBox(height: 35),
+                    
+                    // 5. Gráfico de Rendimiento
+                    const Text("RENDIMIENTO", style: TextStyle(
+                      fontSize: 14, fontWeight: FontWeight.w900, 
+                      color: Color(0xFF94A3B8), letterSpacing: 1.2
+                    )),
+                    const SizedBox(height: 15),
+                    ModernLineChart(racha: data.progreso.racha),
+
+                    const SizedBox(height: 30),
+
+                    // 6. Actividades Recientes
+                    // (Aquí eliminamos la tarjeta duplicada que tenías antes)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          "Actividades recientes",
+                          style: TextStyle(
+                            fontSize: 18, 
+                            fontWeight: FontWeight.bold, 
+                            color: Color(0xFF1E293B)
                           ),
-                          const SizedBox(height: 10),
-                          if (progreso.racha.isEmpty)
-                            const Text(
-                              "Aún no hay datos de racha disponibles.",
-                              style: TextStyle(color: Colors.grey),
-                            )
-                          else
-                            LineChartWidget(
-                              racha: progreso.racha
-                                  .map((r) =>
-                                      {"dia": r.dia, "valor": r.valor})
-                                  .toList(),
-                            ),
-                        ],
-                      ),
+                        ),
+                        TextButton(
+                          onPressed: () {},
+                          child: const Text("Ver todo →", style: TextStyle(color: Color(0xFF64748B))),
+                        )
+                      ],
                     ),
-                  ),
-                  const SizedBox(height: 25),
+                    const SizedBox(height: 10),
 
-                  // --- RUTINA ACTIVA ---
-                  if (data.rutinaActiva != null)
-                    _buildRutinaActivaCard(data.rutinaActiva!),
-
-                  const SizedBox(height: 30),
-
-                  // --- ACTIVIDADES RECIENTES ---
-                  const Text(
-                    "🕒 Actividades recientes",
-                    style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18,
-                        color: Color(0xFF1565C0)),
-                  ),
-                  const SizedBox(height: 10),
-
-                  if (data.actividadesRecientes.isEmpty)
-                    const Center(
-                      child: Text(
-                        "Aún no hay actividades registradas.",
-                        style: TextStyle(color: Colors.grey),
+                    if (data.actividadesRecientes.isEmpty)
+                      const Center(child: Padding(
+                        padding: EdgeInsets.all(20.0),
+                        child: Text("Sin actividad reciente", style: TextStyle(color: Colors.grey)),
+                      ))
+                    else
+                      ListView.separated(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: data.actividadesRecientes.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 16),
+                        itemBuilder: (context, index) {
+                          return _ActivityTile(act: data.actividadesRecientes[index]);
+                        },
                       ),
-                    )
-                  else
-                    ...data.actividadesRecientes
-                        .map((act) => _ActividadTile(act: act))
-                        .toList(),
-                ],
+                    
+                    const SizedBox(height: 80), // Espacio final
+                  ],
+                ),
               ),
             ),
           );
@@ -153,90 +108,394 @@ class HomeScreen extends ConsumerWidget {
       ),
     );
   }
+}
 
-  Widget _buildRutinaActivaCard(RutinaActiva rutina) {
-    return Card(
-      color: const Color(0xFF3DC682),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      elevation: 3,
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text("🏃‍♀️ Rutina Activa",
-                style: TextStyle(color: Colors.white70)),
-            const SizedBox(height: 10),
-            Text(
-              rutina.nombre,
-              style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white),
+// ---------------------------------------------------------------------------
+// 🔹 WIDGETS DE DISEÑO ESPECÍFICO
+// ---------------------------------------------------------------------------
+
+class _ProfessionalStatsSummary extends StatelessWidget {
+  final ProgresoInfo progreso;
+  const _ProfessionalStatsSummary({required this.progreso});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF1E293B).withOpacity(0.06),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // LADO IZQUIERDO: Gráfico Circular
+          SizedBox(
+            height: 100,
+            width: 100,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                CircularProgressIndicator(
+                  value: progreso.totalRutinas > 0 
+                      ? (progreso.completadas / progreso.totalRutinas) 
+                      : 0.0,
+                  strokeWidth: 10,
+                  backgroundColor: const Color(0xFFF1F5F9),
+                  valueColor: const AlwaysStoppedAnimation(Color(0xFF2EBD85)),
+                  strokeCap: StrokeCap.round,
+                ),
+                Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        "${progreso.general.toInt()}%",
+                        style: const TextStyle(
+                          fontSize: 22, fontWeight: FontWeight.w800, color: Color(0xFF1E293B)
+                        ),
+                      ),
+                      const Text("TOTAL", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
+                    ],
+                  ),
+                )
+              ],
             ),
-            const SizedBox(height: 8),
-            Text(
-              rutina.objetivo,
-              style: const TextStyle(color: Colors.white70),
+          ),
+          
+          const SizedBox(width: 20),
+          
+          // LADO DERECHO: Estadísticas Clave
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("Objetivo Global", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 4),
+                Text(
+                  "Has completado ${progreso.completadas} de ${progreso.totalRutinas} rutinas.",
+                  style: TextStyle(fontSize: 13, color: Colors.blueGrey.shade400, height: 1.4),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 16),
+                
+                // 🟢 CORRECCIÓN: Usamos Wrap para evitar Overflow
+                Wrap(
+                  spacing: 8.0,    // Espacio horizontal
+                  runSpacing: 8.0, // Espacio vertical
+                  children: [
+                    _MiniBadge(
+                      label: "Pendientes", 
+                      val: "${progreso.pendientes}", 
+                      color: Colors.orangeAccent
+                    ),
+                    _MiniBadge(
+                      label: "Completadas", 
+                      val: "${progreso.completadas}", 
+                      color: const Color(0xFF2EBD85)
+                    ),
+                  ],
+                )
+              ],
             ),
-            const SizedBox(height: 16),
-            LinearProgressIndicator(
-              value: (rutina.progreso.clamp(0, 100)) / 100,
-              color: Colors.white,
-              backgroundColor: Colors.white24,
-              minHeight: 6,
-              borderRadius: BorderRadius.circular(4),
-            ),
-            const SizedBox(height: 12),
-            ElevatedButton(
-              onPressed: () {},
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: Colors.green,
-                minimumSize: const Size(double.infinity, 45),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-              ),
-              child: const Text(
-                "CONTINUAR ENTRENAMIENTO",
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-            )
-          ],
-        ),
+          )
+        ],
       ),
     );
   }
 }
 
-class _ActividadTile extends StatelessWidget {
-  final ActividadReciente act;
+class _MiniBadge extends StatelessWidget {
+  final String label;
+  final String val;
+  final Color color;
 
-  const _ActividadTile({required this.act});
+  const _MiniBadge({required this.label, required this.val, required this.color});
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      elevation: 1,
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor:
-              act.completado ? Colors.green.shade100 : Colors.red.shade100,
-          child: Icon(
-            act.completado ? Icons.check : Icons.close,
-            color: act.completado ? Colors.green : Colors.red,
-          ),
-        ),
-        title: Text(
-          act.nombre,
-          style: const TextStyle(fontWeight: FontWeight.w600),
-        ),
-        subtitle: Text(
-          "${act.fecha} • ${act.calorias != null ? "${act.calorias} cal" : '-'}",
-        ),
+    return Container(
+      // Padding ajustado para ser más compacto
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(10),
       ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min, 
+        children: [
+          Container(
+            width: 6, height: 6,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            "$val $label", 
+            style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: color.withOpacity(0.8))
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActiveRoutineGreenCard extends ConsumerWidget {
+  final RutinaActiva rutina;
+  const _ActiveRoutineGreenCard({required this.rutina});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF34D399), Color(0xFF10B981)], 
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(30),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF10B981).withOpacity(0.4),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            right: -20, top: -20,
+            child: CircleAvatar(radius: 90, backgroundColor: Colors.white.withOpacity(0.1)),
+          ),
+          Positioned(
+            left: -30, bottom: -30,
+            child: CircleAvatar(radius: 70, backgroundColor: Colors.white.withOpacity(0.1)),
+          ),
+
+          Padding(
+            padding: const EdgeInsets.all(28),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.25),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.bolt, color: Colors.orangeAccent, size: 16),
+                      SizedBox(width: 6),
+                      Text("RUTINA DE HOY", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 10, letterSpacing: 0.5)),
+                    ],
+                  ),
+                ),
+                
+                const SizedBox(height: 20),
+                
+                Text(
+                  rutina.nombre,
+                  style: const TextStyle(
+                    fontSize: 26, 
+                    fontWeight: FontWeight.w800, 
+                    color: Colors.white,
+                    height: 1.1
+                  ),
+                ),
+                
+                const SizedBox(height: 8),
+                
+                const Row(
+                  children: [
+                    Icon(Icons.timer_outlined, color: Colors.white, size: 16),
+                    SizedBox(width: 6),
+                    Text("45 min estimados", style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500)),
+                  ],
+                ),
+
+                const SizedBox(height: 30),
+
+                // Stats Grid
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _GlassStat(value: "${(rutina.progreso/10).ceil()}/10", label: "Ejercicios"),
+                    const _GlassStat(value: "320", label: "Calorías"),
+                    const _GlassStat(value: "28", label: "Minutos", unit: "min"),
+                  ],
+                ),
+
+                const SizedBox(height: 30),
+
+                // Barra de Progreso
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text("Tu progreso", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+                    Text("${rutina.progreso.toInt()}%", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: LinearProgressIndicator(
+                    value: (rutina.progreso / 100).clamp(0.0, 1.0),
+                    minHeight: 10,
+                    backgroundColor: Colors.white.withOpacity(0.3),
+                    valueColor: const AlwaysStoppedAnimation(Colors.white), 
+                  ),
+                ),
+
+                const SizedBox(height: 30),
+
+                SizedBox(
+                  width: double.infinity,
+                  height: 55,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      final result = await showModalBottomSheet(
+                        context: context,
+                        isScrollControlled: true,
+                        backgroundColor: Colors.transparent,
+                        builder: (ctx) => const RegistrarProgresoSheet(), 
+                      );
+
+                      if (result == true) {
+                        ref.refresh(dashboardAlumnoProvider);
+                      }
+                    },
+
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: const Color(0xFF10B981),
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text("CONTINUAR ENTRENAMIENTO", style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
+                        SizedBox(width: 8),
+                        Icon(Icons.arrow_forward, size: 18)
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GlassStat extends StatelessWidget {
+  final String value;
+  final String label;
+  final String? unit;
+
+  const _GlassStat({required this.value, required this.label, this.unit});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 85,
+      padding: const EdgeInsets.symmetric(vertical: 15),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        children: [
+          Text(value, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800)),
+          if (unit != null)
+             Text(unit!, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 4),
+          Text(label, style: const TextStyle(color: Colors.white70, fontSize: 11)),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActivityTile extends StatelessWidget {
+  final ActividadReciente act;
+  const _ActivityTile({required this.act});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(color: Colors.grey.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 2)),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 50, height: 50,
+            decoration: BoxDecoration(
+              color: act.completado ? const Color(0xFFFFEDD5) : const Color(0xFFF1F5F9), 
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(
+              Icons.fitness_center, 
+              color: act.completado ? Colors.orange : Colors.grey,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  act.nombre,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1E293B)),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  "${act.fecha} • ${act.calorias ?? '-'} cal",
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                ),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text("Hoy", style: TextStyle(fontSize: 10, color: Colors.grey.shade400)), 
+              const SizedBox(height: 2),
+              Text("2:30 PM", style: TextStyle(fontSize: 10, color: Colors.grey.shade400)),
+            ],
+          )
+        ],
+      ),
+    );
+  }
+}
+
+class _NoRoutineCard extends StatelessWidget {
+  const _NoRoutineCard();
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(30),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
+      child: const Center(child: Text("Sin rutina asignada")),
     );
   }
 }

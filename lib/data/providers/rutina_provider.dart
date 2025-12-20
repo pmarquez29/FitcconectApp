@@ -30,3 +30,10 @@ final rutinasAlumnoProvider = FutureProvider.autoDispose<List<Rutina>>((ref) asy
   print("📡 [Rutinas] Solicitando rutinas con token activo...");
   return await repo.obtenerRutinasAlumno();
 });
+
+// Provider que recibe el ID de la rutina (family) para cargar datos frescos cada vez
+final rutinaDetalleProvider = FutureProvider.family.autoDispose<Map<String, dynamic>, int>((ref, rutinaId) async {
+  final repo = ref.watch(rutinaRepositoryProvider);
+  // Asegúrate de que tu repo tenga el método obtenerDetalleRutina llamando al nuevo endpoint
+  return await repo.obtenerDetalleRutina(rutinaId);
+});

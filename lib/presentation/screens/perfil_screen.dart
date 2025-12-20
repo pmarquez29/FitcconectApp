@@ -1,31 +1,124 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart'; 
 import 'package:shared_preferences/shared_preferences.dart';
+
+// Providers
 import '../../data/providers/perfil_provider.dart';
 import '../../data/providers/api_provider.dart';
+import '../../data/providers/auth_provider.dart';
 import '../../model/alumno.dart';
 
-class PerfilScreen extends ConsumerWidget {
+class PerfilScreen extends ConsumerStatefulWidget {
   const PerfilScreen({super.key});
 
-  // Imagen segura
-  ImageProvider buildFoto(String? base64img) {
-    if (base64img == null) return const AssetImage("assets/avatar.jpg");
+  @override
+  ConsumerState<PerfilScreen> createState() => _PerfilScreenState();
+}
 
+class _PerfilScreenState extends ConsumerState<PerfilScreen> {
+  final ImagePicker _picker = ImagePicker();
+  bool _isUploading = false;
+
+  // --- Lógica: Cambiar Foto ---
+  Future<void> _cambiarFoto(BuildContext context) async {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(20),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text("Cambiar foto de perfil", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _buildSourceOption(ctx, Icons.camera_alt, "Cámara", ImageSource.camera),
+                _buildSourceOption(ctx, Icons.photo_library, "Galería", ImageSource.gallery),
+              ],
+            ),
+            const SizedBox(height: 10),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSourceOption(BuildContext ctx, IconData icon, String label, ImageSource source) {
+    return InkWell(
+      onTap: () async {
+        Navigator.pop(ctx); 
+        await _procesarImagen(source);
+      },
+      child: Column(
+        children: [
+          CircleAvatar(
+            radius: 30,
+            backgroundColor: Colors.grey.shade100,
+            child: Icon(icon, color: const Color(0xFF2EBD85), size: 30),
+          ),
+          const SizedBox(height: 8),
+          Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _procesarImagen(ImageSource source) async {
     try {
-      final pure = base64img.split(",").last;
+      final XFile? image = await _picker.pickImage(source: source, imageQuality: 50); 
+      if (image == null) return;
 
+      setState(() => _isUploading = true);
+
+      final bytes = await File(image.path).readAsBytes();
+      String base64Image = "data:image/jpeg;base64,${base64Encode(bytes)}";
+
+      final api = ref.read(apiClientProvider);
+      
+      // Llamada al backend
+      await api.post("auth/me/foto", {"fotoBase64": base64Image}); 
+
+      // Recargar providers para actualizar la UI globalmente
+      ref.invalidate(perfilProvider);
+      await ref.read(authProvider.notifier).checkAuthStatus(); // ✅ Ahora sí existe
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Foto actualizada correctamente ✅"), backgroundColor: Color(0xFF2EBD85)),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error al subir imagen: $e"), backgroundColor: Colors.redAccent),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isUploading = false);
+    }
+  }
+
+  // --- Helpers UI ---
+  ImageProvider _buildFotoProvider(String? base64img) {
+    if (base64img == null || base64img.isEmpty) return const AssetImage("assets/avatar.jpg");
+    try {
+      final pure = base64img.contains(",") ? base64img.split(",").last : base64img;
       if (pure.length < 50) return const AssetImage("assets/avatar.jpg");
-
-      final bytes = base64Decode(pure);
-      return MemoryImage(bytes);
+      return MemoryImage(base64Decode(pure));
     } catch (_) {
       return const AssetImage("assets/avatar.jpg");
     }
   }
 
-  // --- SharedPreferences: Notificaciones ---
   Future<bool> _loadNotificaciones() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getBool("notificaciones") ?? true;
@@ -37,221 +130,233 @@ class PerfilScreen extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final perfilAsync = ref.watch(perfilProvider);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text("Perfil")),
-      body: perfilAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => Center(child: Text("Error: $err")),
-        data: (perfil) => _buildUI(context, ref, perfil),
-      ),
-    );
-  }
-
-  Widget _buildUI(BuildContext context, WidgetRef ref, AlumnoPerfil alumno) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 40,
-                backgroundImage: buildFoto(alumno.fotoBase64),
-              ),
-              const SizedBox(width: 16),
-              Text(
-                alumno.nombreCompleto,
-                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 24),
-
-          _buildCuenta(alumno),
-          const SizedBox(height: 24),
-
-          _buildInfoFisica(alumno),
-          const SizedBox(height: 24),
-
-          _buildInstructor(alumno),
-          const SizedBox(height: 24),
-
-          _buildConfiguracion(context, ref, alumno),
-          const SizedBox(height: 24),
-
-          _buildCerrarSesion(context),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCuenta(AlumnoPerfil alumno) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text("Cuenta",
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 8),
-        Card(
-          child: Column(
-            children: [
-              _InfoTile(title: "Correo", value: alumno.email),
-              _InfoTile(title: "Género", value: alumno.genero),
-              _InfoTile(title: "Fecha nacimiento", value: alumno.fechaNacimiento),
-              if (alumno.telefono != null)
-                _InfoTile(title: "Teléfono", value: alumno.telefono!),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildInfoFisica(AlumnoPerfil alumno) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text("Información física",
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 8),
-        Card(
-          child: Column(
-            children: [
-              if (alumno.peso != null)
-                _InfoTile(title: "Peso", value: "${alumno.peso} kg"),
-              if (alumno.altura != null)
-                _InfoTile(title: "Altura", value: "${alumno.altura} m"),
-              if (alumno.objetivo != null)
-                _InfoTile(title: "Objetivo", value: alumno.objetivo!),
-              if (alumno.nivelExperiencia != null)
-                _InfoTile(title: "Nivel", value: alumno.nivelExperiencia!),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildInstructor(AlumnoPerfil alumno) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text("Instructor",
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 8),
-        Card(
-          child: _InfoTile(
-              title: "Asignado a", value: alumno.nombreInstructor),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildConfiguracion(
-      BuildContext context, WidgetRef ref, AlumnoPerfil alumno) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text("Configuración",
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 8),
-
-        FutureBuilder<bool>(
-          future: _loadNotificaciones(),
-          builder: (context, snapshot) {
-            bool notificaciones = snapshot.data ?? true;
-
-            return Card(
-              child: Column(
+    return perfilAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF2EBD85))),
+      error: (err, _) => Center(child: Text("Error al cargar perfil: $err")),
+      data: (perfil) => SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+        physics: const BouncingScrollPhysics(),
+        child: Column(
+          children: [
+            // 1. FOTO DE PERFIL
+            Center(
+              child: Stack(
                 children: [
-                  // Notificaciones
-                  StatefulBuilder(
-                    builder: (context, setSB) {
-                      return SwitchListTile(
-                        title: const Text("Notificaciones"),
-                        value: notificaciones,
-                        onChanged: (value) async {
-                          await _saveNotificaciones(value);
-                          setSB(() => notificaciones = value);
-                        },
-                      );
-                    },
+                  Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 4),
+                      boxShadow: [
+                        BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 20, offset: const Offset(0, 10))
+                      ],
+                    ),
+                    child: CircleAvatar(
+                      radius: 60,
+                      backgroundColor: Colors.grey.shade200,
+                      backgroundImage: _buildFotoProvider(perfil.fotoBase64),
+                      child: _isUploading 
+                          ? const CircularProgressIndicator(color: Color(0xFF2EBD85))
+                          : null,
+                    ),
                   ),
-
-                  // Modo Vacación / Activo
-                  StatefulBuilder(
-                    builder: (context, setSB) {
-                      bool modoVacacion = !alumno.activo;
-
-                      return SwitchListTile(
-                        title: const Text("Modo Vacación"),
-                        subtitle: const Text("Desactiva las rutinas"),
-                        value: modoVacacion,
-                        onChanged: (value) async {
-                          final api = ref.read(apiClientProvider);
-
-                          try {
-                            final resp = await api.post(
-                                "auth/me/toggle-status", {});
-
-                            ref.invalidate(perfilProvider);
-
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(resp["message"])),
-                            );
-
-                            setSB(() => modoVacacion = value);
-                          } catch (e) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                  content: Text("Error al cambiar el estado")),
-                            );
-                          }
-                        },
-                      );
-                    },
+                  Positioned(
+                    bottom: 0,
+                    right: 4,
+                    child: GestureDetector(
+                      onTap: () => _cambiarFoto(context),
+                      child: Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF2EBD85),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.camera_alt, color: Colors.white, size: 20),
+                      ),
+                    ),
                   ),
                 ],
               ),
-            );
-          },
-        )
-      ],
-    );
-  }
+            ),
+            
+            const SizedBox(height: 16),
+            
+            Text(perfil.nombreCompleto, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
+            Text(perfil.email, style: TextStyle(fontSize: 14, color: Colors.grey.shade500)),
 
-  Widget _buildCerrarSesion(BuildContext context) {
-    return Card(
-      child: ListTile(
-        title:
-            const Text("Cerrar sesión", style: TextStyle(color: Colors.red)),
-        leading: const Icon(Icons.logout, color: Colors.red),
-        onTap: () {
-          Navigator.pushNamedAndRemoveUntil(
-              context, '/login', (_) => false);
-        },
+            const SizedBox(height: 30),
+
+            // 2. SECCIONES
+            _ProfileSection(
+              title: "Información Personal",
+              icon: Icons.person_outline,
+              children: [
+                _ProfileInfoTile(icon: Icons.cake_outlined, label: "Nacimiento", value: perfil.fechaNacimiento),
+                _ProfileInfoTile(icon: Icons.wc, label: "Género", value: perfil.genero),
+                if (perfil.telefono != null) _ProfileInfoTile(icon: Icons.phone_outlined, label: "Teléfono", value: perfil.telefono!),
+              ],
+            ),
+
+            const SizedBox(height: 20),
+
+            _ProfileSection(
+              title: "Datos Físicos",
+              icon: Icons.fitness_center_outlined,
+              children: [
+                Row(
+                  children: [
+                    Expanded(child: _StatBox(label: "PESO", value: "${perfil.peso ?? '-'} kg")),
+                    const SizedBox(width: 15),
+                    Expanded(child: _StatBox(label: "ALTURA", value: "${perfil.altura ?? '-'} m")),
+                  ],
+                ),
+                const SizedBox(height: 15),
+                _ProfileInfoTile(icon: Icons.flag_outlined, label: "Objetivo", value: perfil.objetivo ?? "-"),
+                _ProfileInfoTile(icon: Icons.star_outline, label: "Nivel", value: perfil.nivelExperiencia ?? "-"),
+              ],
+            ),
+
+            const SizedBox(height: 20),
+
+            _ProfileSection(
+              title: "Configuración",
+              icon: Icons.settings_outlined,
+              children: [
+                 FutureBuilder<bool>(
+                  future: _loadNotificaciones(),
+                  builder: (context, snapshot) {
+                    bool notificaciones = snapshot.data ?? true;
+                    return SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      activeColor: const Color(0xFF2EBD85),
+                      title: const Text("Notificaciones Push", style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                      value: notificaciones,
+                      onChanged: (val) async {
+                        await _saveNotificaciones(val);
+                        (context as Element).markNeedsBuild();
+                      },
+                    );
+                  }
+                ),
+                const Divider(height: 1),
+                StatefulBuilder(
+                  builder: (context, setStateLocal) {
+                    bool modoVacacion = !perfil.activo;
+                    return SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      activeColor: Colors.orangeAccent,
+                      title: const Text("Modo Vacación", style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                      subtitle: const Text("Pausar rutinas temporalmente", style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      value: modoVacacion,
+                      onChanged: (val) async {
+                         final api = ref.read(apiClientProvider);
+                         try {
+                           await api.post("auth/me/toggle-status", {});
+                           ref.invalidate(perfilProvider);
+                           setStateLocal(() => modoVacacion = val);
+                         } catch (e) {
+                           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Error de conexión")));
+                         }
+                      },
+                    );
+                  }
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 30),
+
+            // 3. LOGOUT
+            SizedBox(
+              width: double.infinity,
+              child: TextButton(
+                onPressed: () async {
+                   await ref.read(authProvider.notifier).logout();
+                   if (context.mounted) {
+                     Navigator.of(context, rootNavigator: true).pushNamedAndRemoveUntil('/', (_) => false);
+                   }
+                },
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 15),
+                  backgroundColor: const Color(0xFFFEF2F2),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.logout, color: Colors.redAccent, size: 20),
+                    SizedBox(width: 8),
+                    Text("Cerrar Sesión", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 40),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _InfoTile extends StatelessWidget {
+// --- WIDGETS AUXILIARES ---
+class _ProfileSection extends StatelessWidget {
   final String title;
-  final String value;
-
-  const _InfoTile({required this.title, required this.value});
-
+  final IconData icon;
+  final List<Widget> children;
+  const _ProfileSection({required this.title, required this.icon, required this.children});
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      title: Text(title),
-      trailing: Text(value,
-          style: const TextStyle(fontWeight: FontWeight.bold)),
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: const Color(0xFF1E293B).withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 4))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [Icon(icon, color: const Color(0xFF2EBD85), size: 20), const SizedBox(width: 10), Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF1E293B)))]),
+          const SizedBox(height: 20),
+          ...children,
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileInfoTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  const _ProfileInfoTile({required this.icon, required this.label, required this.value});
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12.0),
+      child: Row(children: [
+        Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(8)), child: Icon(icon, size: 18, color: Colors.grey.shade400)),
+        const SizedBox(width: 15),
+        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(label, style: TextStyle(fontSize: 11, color: Colors.grey.shade400, fontWeight: FontWeight.bold)), const SizedBox(height: 2), Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF334155)))])
+      ]),
+    );
+  }
+}
+
+class _StatBox extends StatelessWidget {
+  final String label;
+  final String value;
+  const _StatBox({required this.label, required this.value});
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 15),
+      decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade200)),
+      child: Column(children: [Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF1E293B))), const SizedBox(height: 4), Text(label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey.shade400, letterSpacing: 1.2))]),
     );
   }
 }

@@ -1,5 +1,5 @@
 import 'package:app_fitconnect/data/api/api_client.dart';
-import '/model/mensaje.dart';
+import '../../model/mensaje.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 
 class MensajeRepository {
@@ -10,8 +10,9 @@ class MensajeRepository {
 
   // --- SOCKET ---
   void conectarSocket(String token) {
-    final serverUrl = api.baseUrl.replaceFirst('/api', '');
+    if (_socket != null && _socket!.connected) return;
 
+    final serverUrl = api.baseUrl.replaceFirst('/api', '');
     _socket = IO.io(
       serverUrl,
       IO.OptionBuilder()
@@ -20,15 +21,25 @@ class MensajeRepository {
           .setAuth({'token': token})
           .build(),
     );
-
     _socket!.onConnect((_) => print("✅ Socket conectado"));
-    _socket!.onDisconnect((_) => print("❌ Socket desconectado"));
   }
 
   void onNuevoMensaje(Function(Mensaje) callback) {
-    _socket?.on("nuevoMensaje", (data) {
-      callback(Mensaje.fromJson(data));
+    _socket?.off("nuevoMensaje");
+    _socket?.on("nuevoMensaje", (data) => callback(Mensaje.fromJson(data)));
+  }
+
+  void onNuevaNotificacion(Function(Map<String, dynamic>) callback) {
+    _socket?.off("notification");
+    _socket?.on("notification", (data) {
+      print("🔔 Notificación Socket: $data");
+      callback(data);
     });
+  }
+  
+  void onMensajeEnviado(Function(Mensaje) callback) {
+    _socket?.off("mensajeEnviado");
+    _socket?.on("mensajeEnviado", (data) => callback(Mensaje.fromJson(data)));
   }
 
   void desconectarSocket() {
@@ -36,15 +47,85 @@ class MensajeRepository {
   }
 
   // --- REST ---
-  Future<List<Mensaje>> obtenerConversacion(int usuarioId) async {
-    final data = await api.get("mensajes/$usuarioId");
-    return (data as List).map((m) => Mensaje.fromJson(m)).toList();
+
+  // ✅ Marcar mensaje o notificación como leído
+  Future<void> marcarLeido(int id, {bool esNotificacion = false}) async {
+    try {
+      if (esNotificacion) {
+        await api.put("notificaciones/$id/leida", {});
+      } else {
+        await api.put("mensajes/$id/leido", {});
+      }
+    } catch (e) {
+      print("Error marcando leído: $e");
+    }
   }
 
-  Future<Mensaje> enviarMensaje({
-    required int destinatarioId,
-    required String contenido,
-  }) async {
+  Future<List<Mensaje>> obtenerConversacion(int usuarioId, {bool esSistema = false}) async {
+    final List<Mensaje> listaFinal = [];
+
+    // 🔴 CASO A: Chat de Notificaciones (SISTEMA)
+    // Muestra TODAS las notificaciones para que el alumno no pierda nada.
+    if (esSistema) {
+      try {
+        final notifsRaw = await api.get("notificaciones");
+        final notificaciones = (notifsRaw as List)
+            .map((n) => Mensaje(
+                  id: n['id'],
+                  remitenteId: 0,
+                  destinatarioId: 0,
+                  contenido: "📢 *${n['titulo']}*\n${n['mensaje']}",
+                  fechaEnvio: n['created_at'],
+                  leido: n['leido'], // Importante para la UI
+                  tipo: n['tipo'] ?? 'sistema', 
+                ))
+            .toList();
+        listaFinal.addAll(notificaciones);
+      } catch (e) {
+        print("Error notificaciones sistema: $e");
+      }
+    } 
+    // 🔵 CASO B: Chat con Instructor
+    // Muestra Mensajes + Recordatorios (Contexto de chat)
+    else {
+      // 1. Mensajes
+      try {
+        final mensajesRaw = await api.get("mensajes/$usuarioId");
+        final mensajes = (mensajesRaw as List).map((m) => Mensaje.fromJson(m)).toList();
+        listaFinal.addAll(mensajes);
+      } catch (e) { print("Error chat: $e"); }
+
+      // 2. Solo Recordatorios (para no saturar el chat con rutinas viejas)
+      try {
+        final notifsRaw = await api.get("notificaciones");
+        final recordatorios = (notifsRaw as List)
+            .where((n) => n['tipo'] == 'recordatorio')
+            .map((n) => Mensaje(
+                  id: n['id'],
+                  remitenteId: 0, 
+                  destinatarioId: 0,
+                  contenido: "📅 *${n['titulo']}*\n${n['mensaje']}",
+                  fechaEnvio: n['created_at'],
+                  leido: n['leido'],
+                  tipo: 'recordatorio', 
+                ))
+            .toList();
+        listaFinal.addAll(recordatorios);
+      } catch (e) { print("Error recordatorios: $e"); }
+    }
+
+    // Ordenar cronológicamente
+    listaFinal.sort((a, b) {
+      final fechaA = DateTime.tryParse(a.fechaEnvio) ?? DateTime(0);
+      final fechaB = DateTime.tryParse(b.fechaEnvio) ?? DateTime(0);
+      return fechaA.compareTo(fechaB);
+    });
+
+    return listaFinal;
+  }
+
+  // ... (enviarMensaje y obtenerChats igual que antes) ...
+  Future<Mensaje> enviarMensaje({required int destinatarioId, required String contenido}) async {
     final data = await api.post("mensajes", {
       "destinatario_id": destinatarioId,
       "contenido": contenido,
@@ -53,60 +134,34 @@ class MensajeRepository {
   }
 
   Future<List<dynamic>> obtenerChats(String rol, int? instructorId) async {
-  print("🧠 Rol actual: $rol");
-  print("🧩 instructorId: $instructorId");
+    final List<dynamic> chats = [];
 
-  final List<dynamic> chats = [];
+    // 1. Chat Sistema
+    try {
+      final notifsRaw = await api.get("notificaciones");
+      if ((notifsRaw as List).isNotEmpty) {
+        // Ordenamos para sacar el último mensaje real de todo el sistema
+        final notifs = (notifsRaw).toList();
+        notifs.sort((a, b) => DateTime.parse(b['created_at']).compareTo(DateTime.parse(a['created_at'])));
+        
+        final ultimo = notifs.first;
+        chats.add({
+          "id": -1, 
+          "tipo": "sistema",
+          "usuario": {"nombre": "Notificaciones", "apellido": "", "foto": null},
+          "ultimoMensaje": {
+            "contenido": ultimo['mensaje'],
+            "fecha_envio": ultimo['created_at']
+          }
+        });
+      }
+    } catch (_) {}
 
-  if (rol == "alumno" && instructorId != null) {
-    final conv = await obtenerConversacion(instructorId);
-    print("💬 Mensajes con instructor: ${conv.length}");
-    if (conv.isNotEmpty) {
-      final ultimo = conv.last;
-      chats.add({
-        "id": instructorId,
-        "tipo": "chat",
-        "usuario": {"nombre": "Tu instructor", "apellido": ""},
-        "ultimoMensaje": {
-          "contenido": ultimo.contenido,
-          "fecha_envio": ultimo.fechaEnvio,
-        }
-      });
+    // 2. Chat Instructor
+    if (rol == "alumno" && instructorId != null) {
+      final data = await api.get("mensajes/chats"); 
+      if (data is List) chats.addAll(data);
     }
-  } else {
-    final data = await api.get("mensajes/chats");
-    print("📥 Chats devueltos por API: ${data.length}");
-    chats.addAll(data as List);
-  }
-
-  final notifs = await api.get("notificaciones");
-  print("🔔 Notificaciones: ${notifs.length}");
-    for (final n in notifs) {
-      chats.add({
-        "id": n["id"],
-        "tipo": "sistema",
-        "usuario": {
-          "nombre": "SISTEMA FITCONNECT",
-          "apellido": "",
-          "icono": n["tipo"],
-        },
-        "ultimoMensaje": {
-          "contenido": n["mensaje"],
-          "fecha_envio": n["created_at"],
-        },
-        "color": n["tipo"] == "alerta"
-            ? "yellow"
-            : "green",
-      });
-    }
-
-    // 🔹 Ordenar por fecha más reciente
-    chats.sort((a, b) {
-      final fechaA = DateTime.tryParse(a["ultimoMensaje"]["fecha_envio"] ?? "") ?? DateTime(0);
-      final fechaB = DateTime.tryParse(b["ultimoMensaje"]["fecha_envio"] ?? "") ?? DateTime(0);
-      return fechaB.compareTo(fechaA);
-    });
-
     return chats;
   }
 }

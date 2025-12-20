@@ -3,6 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:percent_indicator/linear_percent_indicator.dart';
 import '../../data/providers/progreso_provider.dart';
 import '../../model/progreso.dart';
+// Importamos los componentes necesarios
+import '../widgets/bar_chart_widget.dart'; 
+import '../widgets/registrar_progreso_sheet.dart'; 
+import 'historial_rutinas_screen.dart';
 
 class ProgresoScreen extends ConsumerWidget {
   const ProgresoScreen({super.key});
@@ -12,357 +16,292 @@ class ProgresoScreen extends ConsumerWidget {
     final progresoAsync = ref.watch(progresoProvider);
 
     return Scaffold(
-      body: progresoAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => Center(child: Text("Error: $err")),
-        data: (progreso) => _buildUI(context, progreso),
-      ),
-    );
-  }
-
-  Widget _buildUI(BuildContext context, ProgresoData progreso) {
-    final actividad = progreso.actividadSemanal;
-    final hoy = progreso.rutinaHoy;
-    final rapidas = progreso.rutinasRapidas;
-    final hechas = progreso.rutinasHechas;
-
-    return SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-
-            // -----------------------------
-            // HEADER
-            // -----------------------------
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: const [
-                Text("PROGRESO PERSONAL",
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-                CircleAvatar(
-                  radius: 20,
-                  backgroundImage:
-                      NetworkImage("https://i.pravatar.cc/150?img=12"),
-                )
-              ],
-            ),
-
-            const SizedBox(height: 20),
-
-            // -----------------------------
-            // TARJETA DE PROGRESO TOTAL
-            // -----------------------------
-            _tarjetaProgresoTotal(progreso),
-
-            const SizedBox(height: 25),
-
-            // -----------------------------
-            // ACTIVIDAD SEMANAL
-            // -----------------------------
-            const Text("Actividad semanal",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-            _graficoSemanal(actividad),
-
-            const SizedBox(height: 25),
-
-            // -----------------------------
-            // RUTINA HOY
-            // -----------------------------
-            const Text("Rutina de hoy",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
-            hoy == null ? _noHayRutina() : _tarjetaRutinaHoy(hoy),
-
-            const SizedBox(height: 25),
-
-            // -----------------------------
-            // REVISION RAPIDA
-            // -----------------------------
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: const [
-                Text("Revisión rápida",
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                Text("VER TODO", style: TextStyle(color: Colors.blue))
-              ],
-            ),
-            const SizedBox(height: 10),
-
-            _listaRutinasRapidas(rapidas),
-
-            const SizedBox(height: 25),
-
-            // -----------------------------
-            // RUTINAS HECHAS
-            // -----------------------------
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: const [
-                Text("Completados",
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                Text("VER TODO", style: TextStyle(color: Colors.blue)),
-              ],
-            ),
-            const SizedBox(height: 10),
-
-            _listaRutinasHechas(hechas),
-          ],
+      backgroundColor: const Color(0xFFF8FAFC), // Slate 50
+      body: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: () async => ref.refresh(progresoProvider),
+          color: const Color(0xFF2EBD85),
+          child: progresoAsync.when(
+            loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF2EBD85))),
+            error: (err, _) => Center(child: Text("Error cargando datos: $err")),
+            data: (progreso) => _buildBody(context, progreso, ref),
+          ),
         ),
       ),
     );
   }
 
-  // ============================================================================
-  // TARJETA PROGRESO TOTAL
-  // ============================================================================
-  Widget _tarjetaProgresoTotal(ProgresoData p) {
-    final totalSemanas = p.actividadSemanal.length;
-    final completadas = p.actividadSemanal
-        .where((e) => e.valor > 0)
-        .length;
-
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Colors.black87, Colors.blueGrey],
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-        ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [
-          BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 4))
-        ],
-      ),
-      child: Row(
+  Widget _buildBody(BuildContext context, ProgresoData data, WidgetRef ref) {
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Círculo
-          Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.greenAccent, width: 4),
-            ),
-            child: Center(
-              child: Text(
-                completadas.toString(),
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold),
-              ),
+          // 1. HEADER
+          const Text(
+            "Tu Rendimiento",
+            style: TextStyle(
+              fontSize: 26, 
+              fontWeight: FontWeight.w800, 
+              color: Color(0xFF1E293B),
+              letterSpacing: -0.5
             ),
           ),
+          const Text(
+            "Resumen de tu actividad física",
+            style: TextStyle(fontSize: 14, color: Colors.grey),
+          ),
+          const SizedBox(height: 24),
 
-          const SizedBox(width: 14),
+          // 2. TARJETA RUTINA ACTIVA (HOY)
+          _RutinaActivaCard(rutina: data.rutinaHoy, parentContext: context, ref: ref),
 
-          // Texto
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          const SizedBox(height: 24),
+
+          // 3. GRÁFICO SEMANAL
+          const Text("Progreso Semanal", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
+          const SizedBox(height: 5),
+          const Text("Rutinas completadas por semana", style: TextStyle(fontSize: 12, color: Colors.grey)),
+          const SizedBox(height: 15),
+          
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: data.progresoSemanal.isNotEmpty 
+                // ✅ Pasamos los datos del nuevo endpoint
+                ? WeeklyActivityChart(data: data.progresoSemanal) 
+                : const Center(child: Text("Sin datos recientes.", style: TextStyle(color: Colors.grey))),
+          ),
+
+          const SizedBox(height: 24),
+
+          // 4. HISTORIAL
+          if (data.rutinasHechas.isNotEmpty) ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text("Historial Reciente", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
+                TextButton(
+                  onPressed: () {
+                    // ✅ NAVEGACIÓN A HISTORIAL
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const HistorialRutinasScreen()),
+                    );
+                  }, 
+                  child: const Text("VER TODO", style: TextStyle(color: Color(0xFF2EBD85), fontWeight: FontWeight.bold))
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _HistorialLista(lista: data.rutinasHechas.take(3).toList()), // Solo mostramos las 3 últimas
+          ],
+          
+          const SizedBox(height: 40),
+        ],
+      ),
+    );
+  }
+}
+
+// -----------------------------------------------------------------------------
+// WIDGETS
+// -----------------------------------------------------------------------------
+
+class _RutinaActivaCard extends StatelessWidget {
+  final RutinaHoy? rutina;
+  final BuildContext parentContext;
+  final WidgetRef ref;
+
+  const _RutinaActivaCard({this.rutina, required this.parentContext, required this.ref});
+
+  @override
+  Widget build(BuildContext context) {
+    if (rutina == null) {
+      return Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: const Row(
+          children: [
+            Icon(Icons.bed_outlined, color: Colors.grey, size: 30),
+            SizedBox(width: 16),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text("Descanso", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                Text("No tienes rutina activa hoy", style: TextStyle(color: Colors.grey, fontSize: 12)),
+              ],
+            )
+          ],
+        ),
+      );
+    }
+
+    final r = rutina!;
+    final porcentaje = (r.progreso * 100).toInt();
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF1E293B), Color(0xFF0F172A)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(color: const Color(0xFF1E293B).withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 6)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text("Semana",
-                  style: TextStyle(
-                      color: Colors.grey.shade300,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500)),
-              const SizedBox(height: 4),
-              Text("$completadas / $totalSemanas completadas",
-                  style: const TextStyle(
-                      color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.flash_on, color: Color(0xFF2EBD85), size: 14),
+                    SizedBox(width: 4),
+                    Text("EN PROGRESO", style: TextStyle(color: Color(0xFF2EBD85), fontSize: 10, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
+              // Icono visual
+              Icon(Icons.fitness_center, color: Colors.white.withOpacity(0.3)),
             ],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            r.nombre,
+            style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            "${r.completados} de ${r.totalEjercicios} ejercicios completados",
+            style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 12),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearPercentIndicator(
+                    lineHeight: 6.0,
+                    percent: r.progreso > 1.0 ? 1.0 : r.progreso, // Evitar overflow
+                    padding: EdgeInsets.zero,
+                    backgroundColor: Colors.white.withOpacity(0.1),
+                    progressColor: const Color(0xFF2EBD85),
+                    barRadius: const Radius.circular(4),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text("$porcentaje%", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () async {
+                // ✅ FUNCIONALIDAD: ABRIR SHEET DE REGISTRO
+                await showModalBottomSheet(
+                  context: parentContext,
+                  isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (ctx) => const RegistrarProgresoSheet(
+                    // Sin ID específico, carga la lista general
+                  ),
+                );
+                // Al volver, recargar datos para actualizar la barra
+                ref.refresh(progresoProvider);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2EBD85),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              child: Text("CONTINUAR (${r.tiempoRestante})", style: const TextStyle(fontWeight: FontWeight.bold)),
+            ),
           )
         ],
       ),
     );
   }
+}
 
-  // ============================================================================
-  // GRAFICO SEMANAL
-  // ============================================================================
-  Widget _graficoSemanal(List<ActividadSemanal> actividad) {
-    if (actividad.isEmpty) {
-      return const Text("Aún no hay actividad semanal registrada.");
-    }
+class _HistorialLista extends StatelessWidget {
+  final List<RutinaHecha> lista;
 
-    return SizedBox(
-      height: 200,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: actividad
-            .map((e) => Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      AnimatedContainer(
-                        height: (e.valor / 200) * 150,
-                        duration: const Duration(milliseconds: 500),
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Colors.blue, Colors.blueAccent],
-                            begin: Alignment.bottomCenter,
-                            end: Alignment.topCenter,
-                          ),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text("S${e.semana}", style: const TextStyle(fontSize: 12))
-                    ],
-                  ),
-                ))
-            .toList(),
-      ),
-    );
-  }
+  const _HistorialLista({required this.lista});
 
-  // ============================================================================
-  // TARJETA RUTINA HOY
-  // ============================================================================
-  Widget _tarjetaRutinaHoy(RutinaHoy r) {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(r.nombre,
-                style:
-                    const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
+  @override
+  Widget build(BuildContext context) {
+    return ListView.separated(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: lista.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      itemBuilder: (_, i) {
+        final r = lista[i];
+        // Parsear fecha
+        String fechaStr = "";
+        try {
+          final dt = DateTime.parse(r.fecha);
+          fechaStr = "${dt.day}/${dt.month}";
+        } catch (_) {}
 
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(children: [
-                  const Icon(Icons.access_time, color: Colors.blue),
-                  const SizedBox(width: 6),
-                  Text(r.tiempoRestante),
-                ]),
-                ElevatedButton(
-                  onPressed: () {},
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
-                  child: const Text("Continuar"),
-                )
-              ],
-            ),
-
-            const SizedBox(height: 12),
-            LinearPercentIndicator(
-              lineHeight: 8,
-              percent: r.progreso,
-              backgroundColor: Colors.grey.shade300,
-              progressColor: Colors.blue,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _noHayRutina() {
-    return const Text("No tienes rutina asignada para hoy.");
-  }
-
-  // ============================================================================
-  // LISTA RUTINAS RAPIDAS
-  // ============================================================================
-  Widget _listaRutinasRapidas(List<RutinaRapida> rapidas) {
-    return SizedBox(
-      height: 180,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: rapidas.length,
-        itemBuilder: (_, i) {
-          final r = rapidas[i];
-          return Container(
-            width: 160,
-            margin: const EdgeInsets.only(right: 12),
-            child: Card(
-              elevation: 4,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16)),
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        SizedBox(
-                          width: 60,
-                          height: 60,
-                          child: CircularProgressIndicator(
-                            value: r.progreso,
-                            strokeWidth: 6,
-                            color: Colors.blue,
-                          ),
-                        ),
-                        const Icon(Icons.fitness_center,
-                            color: Colors.blue, size: 32)
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      r.nombre,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 10),
-                    OutlinedButton(
-                        onPressed: () {}, child: const Text("Ver")),
-                  ],
+        return Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey.shade100),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF0FDF4),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.check, color: Color(0xFF2EBD85), size: 16),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  r.nombre,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1E293B)),
                 ),
               ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  // ============================================================================
-  // LISTA RUTINAS HECHAS
-  // ============================================================================
-  Widget _listaRutinasHechas(List<RutinaHecha> hechas) {
-    return SizedBox(
-      height: 150,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: hechas.length,
-        itemBuilder: (_, i) {
-          final r = hechas[i];
-          return Container(
-            width: 160,
-            margin: const EdgeInsets.only(right: 12),
-            child: Card(
-              elevation: 4,
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.check_circle,
-                        size: 48, color: Colors.green),
-                    const SizedBox(height: 10),
-                    Text(
-                      r.nombre,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
+              Text(
+                fechaStr,
+                style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
               ),
-            ),
-          );
-        },
-      ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
+

@@ -36,6 +36,9 @@ class CustomHeader extends ConsumerWidget {
   }
 @override
   Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(notificationListenerProvider);
+    ref.listen(notificacionesListProvider, (_, __) {}); 
+
     final notifCount = ref.watch(notificationCountProvider);
     final user = ref.watch(authProvider).user;
 

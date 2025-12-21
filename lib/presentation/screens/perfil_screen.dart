@@ -9,7 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../data/providers/perfil_provider.dart';
 import '../../data/providers/api_provider.dart';
 import '../../data/providers/auth_provider.dart';
-import '../../model/alumno.dart';
+// import '../../model/alumno.dart'; // Si lo necesitas
 
 class PerfilScreen extends ConsumerStatefulWidget {
   const PerfilScreen({super.key});
@@ -21,6 +21,28 @@ class PerfilScreen extends ConsumerStatefulWidget {
 class _PerfilScreenState extends ConsumerState<PerfilScreen> {
   final ImagePicker _picker = ImagePicker();
   bool _isUploading = false;
+  bool _notificacionesEnabled = true; // Estado local para notificaciones
+
+  @override
+  void initState() {
+    super.initState();
+    _loadNotificaciones(); // Cargar pref al inicio
+  }
+
+  Future<void> _loadNotificaciones() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        _notificacionesEnabled = prefs.getBool("notificaciones") ?? true;
+      });
+    }
+  }
+
+  Future<void> _toggleNotificaciones(bool value) async {
+    setState(() => _notificacionesEnabled = value); // Cambio inmediato
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool("notificaciones", value);
+  }
 
   // --- Lógica: Cambiar Foto ---
   Future<void> _cambiarFoto(BuildContext context) async {
@@ -84,12 +106,10 @@ class _PerfilScreenState extends ConsumerState<PerfilScreen> {
 
       final api = ref.read(apiClientProvider);
       
-      // Llamada al backend
       await api.post("auth/me/foto", {"fotoBase64": base64Image}); 
 
-      // Recargar providers para actualizar la UI globalmente
       ref.invalidate(perfilProvider);
-      await ref.read(authProvider.notifier).checkAuthStatus(); // ✅ Ahora sí existe
+      await ref.read(authProvider.notifier).checkAuthStatus(); 
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -107,7 +127,6 @@ class _PerfilScreenState extends ConsumerState<PerfilScreen> {
     }
   }
 
-  // --- Helpers UI ---
   ImageProvider _buildFotoProvider(String? base64img) {
     if (base64img == null || base64img.isEmpty) return const AssetImage("assets/avatar.jpg");
     try {
@@ -117,16 +136,6 @@ class _PerfilScreenState extends ConsumerState<PerfilScreen> {
     } catch (_) {
       return const AssetImage("assets/avatar.jpg");
     }
-  }
-
-  Future<bool> _loadNotificaciones() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool("notificaciones") ?? true;
-  }
-
-  Future<void> _saveNotificaciones(bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool("notificaciones", value);
   }
 
   @override
@@ -225,45 +234,17 @@ class _PerfilScreenState extends ConsumerState<PerfilScreen> {
               title: "Configuración",
               icon: Icons.settings_outlined,
               children: [
-                 FutureBuilder<bool>(
-                  future: _loadNotificaciones(),
-                  builder: (context, snapshot) {
-                    bool notificaciones = snapshot.data ?? true;
-                    return SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      activeColor: const Color(0xFF2EBD85),
-                      title: const Text("Notificaciones Push", style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-                      value: notificaciones,
-                      onChanged: (val) async {
-                        await _saveNotificaciones(val);
-                        (context as Element).markNeedsBuild();
-                      },
-                    );
-                  }
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  activeColor: const Color(0xFF2EBD85),
+                  title: const Text("Notificaciones Push", style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                  value: _notificacionesEnabled,
+                  onChanged: _toggleNotificaciones,
                 ),
                 const Divider(height: 1),
-                StatefulBuilder(
-                  builder: (context, setStateLocal) {
-                    bool modoVacacion = !perfil.activo;
-                    return SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      activeColor: Colors.orangeAccent,
-                      title: const Text("Modo Vacación", style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-                      subtitle: const Text("Pausar rutinas temporalmente", style: TextStyle(fontSize: 12, color: Colors.grey)),
-                      value: modoVacacion,
-                      onChanged: (val) async {
-                         final api = ref.read(apiClientProvider);
-                         try {
-                           await api.post("auth/me/toggle-status", {});
-                           ref.invalidate(perfilProvider);
-                           setStateLocal(() => modoVacacion = val);
-                         } catch (e) {
-                           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Error de conexión")));
-                         }
-                      },
-                    );
-                  }
-                ),
+                
+                // ✅ WIDGET OPTIMIZADO PARA MODO VACACIÓN
+                _VacationSwitch(initialValue: perfil.activo),
               ],
             ),
 
@@ -298,6 +279,66 @@ class _PerfilScreenState extends ConsumerState<PerfilScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ✅ WIDGET ESPECIALIZADO: MODO VACACIÓN (Sin Lag)
+class _VacationSwitch extends ConsumerStatefulWidget {
+  final bool initialValue;
+  const _VacationSwitch({required this.initialValue});
+
+  @override
+  ConsumerState<_VacationSwitch> createState() => _VacationSwitchState();
+}
+
+class _VacationSwitchState extends ConsumerState<_VacationSwitch> {
+  late bool _value;
+
+  @override
+  void initState() {
+    super.initState();
+    _value = widget.initialValue;
+  }
+
+  @override
+  void didUpdateWidget(covariant _VacationSwitch oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Actualizamos si el valor del padre cambia (por recarga del perfil)
+    if (oldWidget.initialValue != widget.initialValue) {
+      _value = widget.initialValue;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SwitchListTile(
+      contentPadding: EdgeInsets.zero,
+      activeColor: Colors.orangeAccent,
+      title: const Text("Modo Vacación", style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+      subtitle: const Text("Pausar rutinas temporalmente", style: TextStyle(fontSize: 12, color: Colors.grey)),
+      value: _value,
+      onChanged: (val) async {
+        // 1. Cambio VISUAL INMEDIATO (Optimistic UI)
+        setState(() => _value = val);
+
+        try {
+          // 2. Llamada a la API en segundo plano
+          final api = ref.read(apiClientProvider);
+          await api.post("auth/me/toggle-status", {});
+          
+          // 3. Refrescar el provider globalmente (para que la app se entere)
+          ref.invalidate(perfilProvider);
+        } catch (e) {
+          // 4. Si falla, REVERTIMOS el cambio visual
+          setState(() => _value = !val);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("Error al cambiar estado. Intenta de nuevo.")),
+            );
+          }
+        }
+      },
     );
   }
 }

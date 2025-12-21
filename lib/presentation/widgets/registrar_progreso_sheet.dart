@@ -55,41 +55,27 @@ class _RegistrarProgresoSheetState extends ConsumerState<RegistrarProgresoSheet>
     try {
       final api = ref.read(apiClientProvider);
       
-      // Si tenemos asignacionId (venimos del detalle), usamos un endpoint específico o filtramos
-      // Pero para simplificar y usar tu lógica actual:
-      final response = await api.get("progreso/mis-ejercicios"); 
+      // ✅ ENVIAR ID ESPECÍFICO
+      String endpoint = "progreso/mis-ejercicios";
+      if (widget.asignacionId != null) {
+        endpoint += "?asignacion_id=${widget.asignacionId}";
+      }
+
+      final response = await api.get(endpoint); 
       
       final lista = (response as List).map((e) => EjercicioSimple.fromJson(e)).toList();
       
-      // 1. Filtramos por la asignación actual si nos la pasaron, para no mezclar rutinas
-      List<EjercicioSimple> filtrados = lista;
-      if (widget.asignacionId != null) {
-         // Asumiendo que tu backend en "mis-ejercicios" devuelva algo para identificar la asignación
-         // Si no, confiamos en que el backend devuelve las activas.
-      }
-
-      // 2. 🔴 IMPORTANTE: No filtramos los completados si venimos a editar uno específico.
-      // O si prefieres mantener el filtro, asegúrate de INCLUIR el seleccionado.
-      if (widget.preSelectedEjercicioId != null) {
-        // Si hay uno preseleccionado, mostramos todos (o al menos ese)
-        filtrados = lista; 
-      } else {
-        // Si es carga normal, solo pendientes para no saturar
-        filtrados = lista.where((e) => !e.completado).toList();
-      }
-
       if (mounted) {
         setState(() {
-          _ejercicios = filtrados;
+          _ejercicios = lista; // Ya no filtramos localmente, el backend trae lo correcto
           
-          // 3. 🔴 VALIDACIÓN ANTIM-CRASH
-          // Verificamos si el ID que nos pasaron existe en la lista final
+          // Validación anti-crash
           if (widget.preSelectedEjercicioId != null) {
             final existe = _ejercicios.any((e) => e.progresoId == widget.preSelectedEjercicioId);
             if (existe) {
               _selectedProgresoId = widget.preSelectedEjercicioId;
             } else {
-              _selectedProgresoId = null; // Si no existe, no seleccionamos nada para evitar el error 29
+              _selectedProgresoId = null;
             }
           }
           

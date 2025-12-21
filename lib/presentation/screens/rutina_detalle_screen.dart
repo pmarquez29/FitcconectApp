@@ -93,7 +93,7 @@ class RutinaDetalleScreen extends ConsumerWidget {
                     error: (err, _) => Text("Error: $err", style: const TextStyle(color: Colors.red)),
                     data: (data) {
                       final ejercicios = data["ejercicios"] as List;
-                      final asignacionId = data["asignacion_id"];
+                      final asignacionId = data["asignacion_id"] ?? data["id"];
 
                       if (ejercicios.isEmpty) {
                         return const Text("No hay ejercicios disponibles.");
@@ -114,10 +114,11 @@ class RutinaDetalleScreen extends ConsumerWidget {
                               isScrollControlled: true,
                               backgroundColor: Colors.transparent,
                               builder: (ctx) => RegistrarProgresoSheet(
-                                // 🔴 CORRECCIÓN AQUÍ: Usar "progreso_id" en lugar de "id"
-                                preSelectedEjercicioId: ejercicios[index]["progreso_id"], 
-                                asignacionId: asignacionId, 
-                              ), 
+                                  // Pasamos el ID del ejercicio específico
+                                  preSelectedEjercicioId: ejercicios[index]["progreso_id"], 
+                                  // ✅ Pasamos el ID de la asignación CORRECTA
+                                  asignacionId: asignacionId, 
+                                ),
                             );
 
                               if (result == true) {

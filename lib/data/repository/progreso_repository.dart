@@ -21,4 +21,9 @@ class ProgresoRepository {
     }
     return [];
   }
+
+  Future<List<dynamic>> obtenerLogros() async {
+    return await api.get("progreso/logros");
+  }
 }
+

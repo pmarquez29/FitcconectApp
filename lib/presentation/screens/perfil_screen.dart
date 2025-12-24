@@ -96,7 +96,12 @@ class _PerfilScreenState extends ConsumerState<PerfilScreen> {
 
   Future<void> _procesarImagen(ImageSource source) async {
     try {
-      final XFile? image = await _picker.pickImage(source: source, imageQuality: 50); 
+      final XFile? image = await _picker.pickImage(
+        source: source, 
+        imageQuality: 50, // Comprime calidad jpg
+        maxWidth: 800,    
+        maxHeight: 800,   
+      ); 
       if (image == null) return;
 
       setState(() => _isUploading = true);

@@ -1,11 +1,19 @@
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 
 class ApiClient {
   String? token;
 
   String get baseUrl {
+    // Si estamos en modo "Release" (APK generado o App Store), usa RENDER
+    if (kReleaseMode) {
+      return "https://fitconnectbackend-zrwg.onrender.com/api"; 
+      // ⚠️ Asegúrate de que esta URL sea exacta (sin espacios extra)
+    }
+    
+    // Si estamos en modo "Debug" (Programando en tu PC), usa LOCALHOST
     if (Platform.isAndroid) {
       return "http://10.0.2.2:4000/api";
     } else {
